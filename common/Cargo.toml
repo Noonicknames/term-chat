@@ -1,0 +1,11 @@
+[package]
+name = "common"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_cbor.workspace = true

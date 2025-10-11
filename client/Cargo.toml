@@ -1,0 +1,17 @@
+[package]
+name = "client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme.workspace = true
+
+[dependencies]
+common.workspace = true
+
+clap = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util"] }
+
+env_logger.workspace = true
+log = { workspace = true }
+thiserror.workspace = true

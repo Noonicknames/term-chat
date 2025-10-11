@@ -1,0 +1,25 @@
+[workspace]
+members = ["client", "common", "server"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Noonicknames"]
+rust-version = "1.86"
+readme = "README.md"
+
+[workspace.dependencies]
+common = { path = "./common" }
+
+clap = { version = "4.5.*" }
+
+futures = { version = "0.3.*", default-features = false }
+tokio = { version = "1.47.*", default-features = false }
+papaya = { version = "0.2.*" }
+serde = { version = "1.0.*" }
+
+log = { version = "0.4.*" }
+thiserror = { version = "2.*" }
+env_logger = { version = "0.11.*" }
+serde_cbor = { version = "0.11.*" }

@@ -1,0 +1,2 @@
+[env]
+rust_log = "info"

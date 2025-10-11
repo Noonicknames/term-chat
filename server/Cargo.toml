@@ -1,0 +1,20 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme.workspace = true
+
+[dependencies]
+common.workspace = true
+
+futures = { workspace = true, features = ["alloc"] }
+clap = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util"] }
+serde_cbor.workspace = true
+papaya.workspace = true
+
+env_logger.workspace = true
+log = { workspace = true }
+thiserror.workspace = true
