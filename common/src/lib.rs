@@ -34,6 +34,9 @@ pub enum ClientMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ServerMessage {
     AcceptJoin,
+    ClientListUpdate {
+        clients: Vec<ClientId>,
+    },
     /// Client receives a messsage.
     ReceiveMessage {
         sender: ClientId,

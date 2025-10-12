@@ -129,6 +129,22 @@ impl Server {
             }
         };
 
+        let message = ServerMessage::ClientListUpdate {
+            clients: self.clients.pin_owned().keys().cloned().collect(),
+        };
+        let message = match serde_cbor::to_vec(&message) {
+            Ok(message) => Bytes::from(message),
+            Err(err) => {
+                error!("Error deserialising message: {}", err);
+                return;
+            }
+        };
+
+        let this = Arc::clone(&self);
+        tokio::task::spawn(async move {
+            this.broadcast(&message).await;
+        });
+
         loop {
             let message = match read_msg.next().await {
                 Some(Ok(message)) => message,
@@ -137,10 +153,7 @@ impl Server {
                     continue;
                 }
                 None => {
-                    error!(
-                        "Error deserialising message from {}",
-                        addr
-                    );
+                    error!("Error deserialising message from {}", addr);
                     break;
                 }
             };
@@ -169,28 +182,49 @@ impl Server {
                             continue;
                         }
                     };
-
-                    let mut futures = FuturesUnordered::new();
-
-                    let mut client_vec = Vec::new();
-                    for (_id, client) in self.clients.pin().iter() {
-                        client_vec.push(Arc::clone(client));
-                    }
-
-                    for client in client_vec {
-                        let message = message.clone();
-                        futures.push(async move {
-                            if let Err(err) = client.write_msg.lock().await.send(message).await {
-                                error!("Error sending message to {}: {}", client.id, err);
-                            }
-                        })
-                    }
-
-                    while let Some(()) = futures.next().await {}
+                    let this = Arc::clone(&self);
+                    tokio::task::spawn(async move {
+                        this.broadcast(&message).await;
+                    });
                 }
             }
         }
         self.clients.pin().remove(&client_id);
         info!("{} has been removed from clients list.", client_id);
+
+        let message = ServerMessage::ClientListUpdate {
+            clients: self.clients.pin_owned().keys().cloned().collect(),
+        };
+        let message = match serde_cbor::to_vec(&message) {
+            Ok(message) => Bytes::from(message),
+            Err(err) => {
+                error!("Error deserialising message: {}", err);
+                return;
+            }
+        };
+        let this = Arc::clone(&self);
+        tokio::task::spawn(async move {
+            this.broadcast(&message).await;
+        });
+    }
+
+    pub async fn broadcast(self: &Arc<Self>, message: &Bytes) {
+        let mut futures = FuturesUnordered::new();
+
+        let mut client_vec = Vec::new();
+        for (_id, client) in self.clients.pin().iter() {
+            client_vec.push(Arc::clone(client));
+        }
+
+        for client in client_vec {
+            let message = message.clone();
+            futures.push(async move {
+                if let Err(err) = client.write_msg.lock().await.send(message).await {
+                    error!("Error sending message to {}: {}", client.id, err);
+                }
+            })
+        }
+
+        while let Some(()) = futures.next().await {}
     }
 }

@@ -16,6 +16,9 @@ pub enum Event {
 
 pub enum InteractiveEvent {
     RedrawRequest,
+    ClientListUpdate {
+        clients: Vec<ClientId>,
+    },
     SendMessage {
         content: String,
     },

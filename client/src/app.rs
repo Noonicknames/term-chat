@@ -5,12 +5,7 @@ use crossterm::event::{MouseEvent, MouseEventKind};
 use futures::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Style, Stylize},
-    text::Line,
-    widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget},
+    buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget}, DefaultTerminal, Frame
 };
 
 use tokio_util::bytes::Bytes;
@@ -54,6 +49,7 @@ pub async fn run_app(args: CommandArgs) -> Result<(), AppError> {
 pub struct App {
     resources: Arc<AppResources>,
     messages: MessageListWidget,
+    client_list: ClientListWidget,
     send_message: SendMessageWidget,
 }
 
@@ -61,6 +57,7 @@ impl App {
     pub async fn new(resources: Arc<AppResources>) -> Result<Self, AppError> {
         Ok(Self {
             messages: MessageListWidget::new(),
+            client_list: ClientListWidget::new(),
             send_message: SendMessageWidget::new(Arc::clone(&resources)),
             resources,
         })
@@ -99,6 +96,12 @@ impl App {
             match message {
                 ServerMessage::AcceptJoin => {
                     info!("Server accepted your join request.")
+                }
+                ServerMessage::ClientListUpdate { clients } => {
+                    event_sender
+                        .send(InteractiveEvent::ClientListUpdate { clients })
+                        .await
+                        .unwrap();
                 }
                 ServerMessage::ReceiveMessage { message, sender } => {
                     event_sender
@@ -154,19 +157,23 @@ impl App {
     pub async fn on_exit(&mut self, _resources: &Arc<AppResources>) {}
 
     fn render(&mut self, frame: &mut Frame) {
-        let layout = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Fill(1),
-            Constraint::Length(8),
-        ]);
-        let [title_area, messages_area, send_area] = layout.areas(frame.area());
-        let title = Line::from("term-chat")
+        let layout1 = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
+
+        let [title_area, main_area] = layout1.areas(frame.area());
+
+        let layout2 = Layout::horizontal([Constraint::Fill(1), Constraint::Length(26)]);
+
+        let [main_area2, client_list_area] = layout2.areas(main_area);
+        let layout3 = Layout::vertical([Constraint::Fill(1), Constraint::Length(8)]);
+        let [messages_area, send_area] = layout3.areas(main_area2);
+        let title = Line::from("term-chat 🚀")
             .centered()
             .bold()
             .fg(Color::Rgb(255, 242, 197));
         frame.render_widget(title, title_area);
         frame.render_widget(&mut self.messages, messages_area);
         frame.render_widget(&mut self.send_message, send_area);
+        frame.render_widget(&mut self.client_list, client_list_area);
     }
 
     async fn handle_event(
@@ -197,6 +204,17 @@ impl App {
             InteractiveEvent::RedrawRequest => {
                 // terminal.swap_buffers();
                 terminal.draw(|frame| self.render(frame)).unwrap();
+                Ok(false)
+            }
+            InteractiveEvent::ClientListUpdate { clients } => {
+                self.client_list.clients.clear();
+                for client in clients {
+                    self.client_list.clients.push(ClientItem { id: client });
+                }
+                event_sender
+                    .send(InteractiveEvent::RedrawRequest)
+                    .await
+                    .unwrap();
                 Ok(false)
             }
             InteractiveEvent::ReceiveMessage { sender, content } => {
@@ -292,7 +310,6 @@ impl App {
                 kind: MouseEventKind::ScrollDown,
                 ..
             }) => {
-                info!("We are scrolling down right now");
                 self.messages.scroll_down();
                 event_sender
                     .send(InteractiveEvent::RedrawRequest)
@@ -302,6 +319,50 @@ impl App {
             }
             _ => Ok(false),
         }
+    }
+}
+
+struct ClientListWidget {
+    clients: Vec<ClientItem>,
+    list_state: ListState,
+}
+
+struct ClientItem {
+    id: ClientId,
+}
+
+impl From<&'_ ClientItem> for ListItem<'_> {
+    fn from(value: &'_ ClientItem) -> Self {
+        ListItem::new(format!("⚡ {}", value.id.name))
+    }
+}
+
+impl ClientListWidget {
+    fn new() -> Self {
+        Self {
+            clients: vec![],
+            list_state: ListState::default(),
+        }
+    }
+}
+
+impl Widget for &mut ClientListWidget {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        // a block with a right aligned title with the loading state on the right
+        let block = Block::bordered()
+            .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+            .title("Users Online")
+            .title_bottom(Line::from(":q to quit").right_aligned());
+
+        // a table with the list of pull requests
+        let items = self.clients.iter();
+        let list = List::new(items)
+            .block(block)
+            .highlight_spacing(HighlightSpacing::Always)
+            .highlight_symbol(">")
+            .highlight_style(Style::new().on_blue());
+
+        StatefulWidget::render(list, area, buf, &mut self.list_state);
     }
 }
 
@@ -333,7 +394,7 @@ struct Message {
 
 impl From<&'_ Message> for ListItem<'_> {
     fn from(value: &'_ Message) -> Self {
-        ListItem::new(format!("{}: {}", value.id, value.content))
+        ListItem::new(format!("[{}]: {}", value.id.name, value.content))
     }
 }
 
