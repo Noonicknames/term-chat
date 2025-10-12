@@ -12,11 +12,12 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style, Stylize},
-    text::Line,
+    text::{Line, Span, Text},
     widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 use tokio_util::bytes::Bytes;
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     CommandArgs,
@@ -411,7 +412,36 @@ struct Message {
 
 impl From<&'_ Message> for ListItem<'_> {
     fn from(value: &'_ Message) -> Self {
-        ListItem::new(format!("[{}]: {}", value.id.name, value.content))
+        let mut text = Text::default();
+
+        let full_header = format!("[{}]: ", value.id.name);
+
+        let header_width = full_header.width();
+
+        let mut header_line = Line::default();
+        header_line.push_span(
+            Span::from(format!("[{}]:", value.id.name))
+                .style(Style::new().fg(Color::Cyan).bg(Color::Black).bold()),
+        );
+        header_line.push_span(Span::from(" ").style(Style::new().fg(Color::Cyan)));
+
+        let mut lines = value.content.lines();
+
+        if let Some(line) = lines.next() {
+            header_line.push_span(Span::from(line.to_owned()).style(Style::new()));
+        }
+
+        text.push_line(header_line);
+
+        for line_content in lines {
+            let mut line = Line::default();
+
+            line.push_span(Span::from(format!("{:width$}", "", width = header_width)));
+            line.push_span(Span::from(format!("{}", line_content)).style(Style::new()));
+
+            text.push_line(line);
+        }
+        ListItem::new(text)
     }
 }
 

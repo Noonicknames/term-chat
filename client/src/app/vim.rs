@@ -5,7 +5,7 @@ use log::{debug, info};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Style, Stylize},
     text::Line,
     widgets::{Block, Widget},
 };
@@ -119,6 +119,7 @@ fn key_to_cursor_move(code: KeyCode) -> Option<CursorMove> {
 impl SendMessageWidget {
     pub fn new(resources: Arc<AppResources>) -> Self {
         let mut text_area = TextArea::new(Vec::new());
+        text_area.set_cursor_line_style(Style::new().not_underlined());
         text_area.set_block(
             Block::bordered()
                 .title_top(Line::from("Normal").left_aligned())
