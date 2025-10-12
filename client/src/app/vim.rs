@@ -108,6 +108,7 @@ impl SendMessageWidget {
                 ..
             } => {
                 self.command_text_area = TextArea::new(vec![":".to_owned()]);
+                self.command_text_area.move_cursor(CursorMove::End);
                 self.command_text_area
                     .set_yank_text(self.text_area.yank_text());
                 self.command_text_area.set_block(
@@ -138,7 +139,7 @@ impl SendMessageWidget {
             _ => false,
         }
     }
-    async fn command_input(&mut self, event: KeyEvent, _event_sender: &EventSender) -> bool {
+    async fn command_input(&mut self, event: KeyEvent, event_sender: &EventSender) -> bool {
         match event {
             KeyEvent {
                 code: KeyCode::Esc,
@@ -157,15 +158,28 @@ impl SendMessageWidget {
                 let command = self.command_text_area.lines()[0].clone();
 
                 info!("Entered command: {}", command);
+
+                match command.as_str() {
+                    ":q" => {
+                        event_sender.send(InteractiveEvent::Quit).await.unwrap();
+                    }
+                    _ => {}
+                }
                 self.command_text_area = TextArea::new(Vec::new());
                 self.resources.state.write().await.mode = VimMode::Normal;
                 true
             }
             KeyEvent {
-                code: KeyCode::Char(_),
+                code: KeyCode::Char(_) | KeyCode::Backspace | KeyCode::Tab | KeyCode::Delete | KeyCode::Insert | KeyCode::Left | KeyCode::Right,
                 kind: KeyEventKind::Press,
                 ..
-            } => self.command_text_area.input(event),
+            } => {
+                let result = self.command_text_area.input(event);
+                if self.command_text_area.cursor().0 == 0 {
+                    self.command_text_area.move_cursor(CursorMove::Forward);
+                }
+                result
+            }
             _ => false,
         }
     }
@@ -202,7 +216,7 @@ impl Widget for &mut SendMessageWidget {
         if self.command_text_area.is_empty() {
             self.text_area.render(area, buf);
         } else {
-            let layout = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]);
+            let layout = Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]);
             let [text_area, command_area] = layout.areas(area);
 
             self.text_area.render(text_area, buf);
