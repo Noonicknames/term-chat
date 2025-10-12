@@ -1,0 +1,2 @@
+INFO [term_chat::app::resources] Resolved server socket address: 74.208.227.37:6942
+ERROR [term_chat] Error occurred: No connection could be made because the target machine actively refused it. (os error 10061)

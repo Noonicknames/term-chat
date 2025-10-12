@@ -43,7 +43,8 @@ impl SendMessageWidget {
         }
     }
     pub async fn input(&mut self, event: KeyEvent, event_sender: &EventSender) -> bool {
-        match self.resources.state.read().await.mode {
+        let mode = self.resources.state.read().await.mode;
+        match mode {
             VimMode::Normal => match event {
                 KeyEvent {
                     code: KeyCode::Esc,

@@ -1,0 +1,3 @@
+INFO [term_chat::app::resources] Resolved server socket address: 74.208.227.37:6942
+DEBUG [term_chat::app::vim] Sending message
+DEBUG [term_chat::app::vim] Sent message: dsjfalksdjf

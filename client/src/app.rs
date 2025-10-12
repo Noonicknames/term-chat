@@ -87,7 +87,6 @@ impl App {
         event_sender: EventSender,
     ) -> Result<(), AppError> {
         // Connect to server
-
         while let Some(Ok(message)) = resources.read_msg.lock().await.next().await {
             let message: ServerMessage = match serde_cbor::de::from_slice(&message) {
                 Ok(message) => message,

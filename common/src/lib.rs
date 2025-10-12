@@ -9,10 +9,12 @@ use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 
-pub type ReadStream = SplitStream<Framed<TcpStream, LengthDelimitedCodec>>;
-pub type WriteStream = SplitSink<Framed<TcpStream, LengthDelimitedCodec>, tokio_util::bytes::Bytes>;
+pub mod secure;
 
-pub fn split_message_stream(stream: TcpStream) -> (WriteStream, ReadStream) {
+pub type ReadStream = SplitStream<Framed<TcpStream, LengthDelimitedCodec>>;
+pub type WriteSink = SplitSink<Framed<TcpStream, LengthDelimitedCodec>, tokio_util::bytes::Bytes>;
+
+pub fn split_message_stream(stream: TcpStream) -> (WriteSink, ReadStream) {
     Framed::new(stream, LengthDelimitedCodec::new()).split()
 }
 

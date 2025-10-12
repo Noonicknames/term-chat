@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use common::{ClientId, ClientMessage, ServerMessage, WriteStream, split_message_stream};
+use common::{ClientId, ClientMessage, ServerMessage, WriteSink, split_message_stream};
 use futures::{SinkExt, StreamExt, stream::FuturesUnordered};
 use log::{error, info, warn};
 use papaya::HashMap;
@@ -18,7 +18,7 @@ pub enum ServerError {
 
 pub struct Client {
     id: ClientId,
-    write_msg: Mutex<WriteStream>,
+    write_msg: Mutex<WriteSink>,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]

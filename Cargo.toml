@@ -23,6 +23,13 @@ tokio-util = { version = "0.7.*" }
 papaya = { version = "0.2.*", default-features = false}
 serde = { version = "1.0.*" }
 
+aes-gcm = "0.10.3"
+flate2 = { version = "1.1.4", default-features = false, features = ["zlib-rs"]}
+hkdf = "0.12.4"
+lz4 = "1.28.1"
+p521 = { version = "0.13.3", features = ["ecdh", "rand_core"] }
+sha2 = "0.10.9"
+
 log = { version = "0.4.*" }
 thiserror = { version = "2.*" }
 env_logger = { version = "0.11.*" }

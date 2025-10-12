@@ -1,4 +1,4 @@
-use common::{split_message_stream, ClientId, ClientMessage, ReadStream, ServerMessage, WriteStream};
+use common::{split_message_stream, ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink};
 use futures::{SinkExt, StreamExt};
 use log::info;
 use tokio::{net::TcpSocket, sync::{Mutex, RwLock}};
@@ -15,7 +15,7 @@ pub struct AppState {
 pub struct AppResources {
     pub id: ClientId,
     pub read_msg: Mutex<ReadStream>,
-    pub write_msg: Mutex<WriteStream>,
+    pub write_msg: Mutex<WriteSink>,
     pub state: RwLock<AppState>,
 }
 
