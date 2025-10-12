@@ -168,11 +168,95 @@ impl SendMessageWidget {
                 false
             }
             KeyEvent {
+                code: KeyCode::Char('a'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.resources.state.write().await.mode = VimMode::Insert;
+                self.text_area.move_cursor(CursorMove::Forward);
+                self.text_area.set_block(
+                    Block::bordered()
+                        .title_top(Line::from("Insert").left_aligned())
+                        .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+                        .title_bottom(Line::from("Type :q to quit").right_aligned()),
+                );
+                self.prev_action.clear();
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('A'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.resources.state.write().await.mode = VimMode::Insert;
+                self.text_area.move_cursor(CursorMove::End);
+                self.text_area.set_block(
+                    Block::bordered()
+                        .title_top(Line::from("Insert").left_aligned())
+                        .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+                        .title_bottom(Line::from("Type :q to quit").right_aligned()),
+                );
+                self.prev_action.clear();
+                true
+            }
+            KeyEvent {
                 code: KeyCode::Char('i'),
                 kind: KeyEventKind::Press,
                 ..
             } => {
                 self.resources.state.write().await.mode = VimMode::Insert;
+                self.text_area.set_block(
+                    Block::bordered()
+                        .title_top(Line::from("Insert").left_aligned())
+                        .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+                        .title_bottom(Line::from("Type :q to quit").right_aligned()),
+                );
+                self.prev_action.clear();
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('I'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.resources.state.write().await.mode = VimMode::Insert;
+                self.text_area.move_cursor(CursorMove::Head);
+                self.text_area.set_block(
+                    Block::bordered()
+                        .title_top(Line::from("Insert").left_aligned())
+                        .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+                        .title_bottom(Line::from("Type :q to quit").right_aligned()),
+                );
+                self.prev_action.clear();
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('o'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.resources.state.write().await.mode = VimMode::Insert;
+                self.text_area.move_cursor(CursorMove::End);
+                self.text_area.insert_newline();
+                // self.text_area.move_cursor(CursorMove::Down);
+                self.text_area.set_block(
+                    Block::bordered()
+                        .title_top(Line::from("Insert").left_aligned())
+                        .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+                        .title_bottom(Line::from("Type :q to quit").right_aligned()),
+                );
+                self.prev_action.clear();
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('O'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.resources.state.write().await.mode = VimMode::Insert;
+                self.text_area.move_cursor(CursorMove::Head);
+                self.text_area.insert_newline();
+                self.text_area.move_cursor(CursorMove::Up);
                 self.text_area.set_block(
                     Block::bordered()
                         .title_top(Line::from("Insert").left_aligned())
