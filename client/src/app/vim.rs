@@ -530,6 +530,12 @@ impl SendMessageWidget {
     async fn insert_input(&mut self, event: KeyEvent, _event_sender: &EventSender) -> bool {
         if event.code == KeyCode::Esc {
             self.resources.state.write().await.mode = VimMode::Normal;
+            self.text_area.set_block(
+                    Block::bordered()
+                        .title_top(Line::from("Normal").left_aligned())
+                        .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
+                        .title_bottom(Line::from("Type :q to quit").right_aligned()),
+                );
             true
         } else {
             self.text_area.input(event)
