@@ -5,7 +5,7 @@ use crossterm::event::{MouseEvent, MouseEventKind};
 use futures::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use ratatui::{
-    buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget}, DefaultTerminal, Frame
+    buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::Line, widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget}, DefaultTerminal, Frame
 };
 
 use tokio_util::bytes::Bytes;
@@ -351,8 +351,7 @@ impl Widget for &mut ClientListWidget {
         // a block with a right aligned title with the loading state on the right
         let block = Block::bordered()
             .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
-            .title("Users Online")
-            .title_bottom(Line::from(":q to quit").right_aligned());
+            .title("Users Online");
 
         // a table with the list of pull requests
         let items = self.clients.iter();
@@ -403,8 +402,7 @@ impl Widget for &mut MessageListWidget {
         // a block with a right aligned title with the loading state on the right
         let block = Block::bordered()
             .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
-            .title("Messages")
-            .title_bottom(Line::from(":q to quit").right_aligned());
+            .title("Messages");
 
         // a table with the list of pull requests
         let items = self.messages.iter();
