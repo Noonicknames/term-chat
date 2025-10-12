@@ -62,6 +62,19 @@ impl SendMessageWidget {
             command_text_area,
         }
     }
+    async fn send_message(&mut self, event_sender: &EventSender) -> bool {
+        debug!("Sending message");
+        self.text_area.select_all();
+        let need_rerender = self.text_area.cut();
+        event_sender
+            .send(InteractiveEvent::SendMessage {
+                content: self.text_area.yank_text(),
+            })
+            .await
+            .unwrap();
+        debug!("Sent message: {}", self.text_area.yank_text());
+        need_rerender
+    }
     async fn normal_input(&mut self, event: KeyEvent, event_sender: &EventSender) -> bool {
         match event {
             KeyEvent {
@@ -76,19 +89,7 @@ impl SendMessageWidget {
                 code: KeyCode::Enter,
                 kind: KeyEventKind::Press,
                 ..
-            } => {
-                debug!("Sending message");
-                self.text_area.select_all();
-                let need_rerender = self.text_area.cut();
-                event_sender
-                    .send(InteractiveEvent::SendMessage {
-                        content: self.text_area.yank_text(),
-                    })
-                    .await
-                    .unwrap();
-                debug!("Sent message: {}", self.text_area.yank_text());
-                need_rerender
-            }
+            } => self.send_message(event_sender).await,
             KeyEvent {
                 code: KeyCode::Char('i'),
                 kind: KeyEventKind::Press,
@@ -163,6 +164,9 @@ impl SendMessageWidget {
                     ":q" => {
                         event_sender.send(InteractiveEvent::Quit).await.unwrap();
                     }
+                    ":w" => {
+                        self.send_message(event_sender).await;
+                    }
                     _ => {}
                 }
                 self.command_text_area = TextArea::new(Vec::new());
@@ -170,7 +174,14 @@ impl SendMessageWidget {
                 true
             }
             KeyEvent {
-                code: KeyCode::Char(_) | KeyCode::Backspace | KeyCode::Tab | KeyCode::Delete | KeyCode::Insert | KeyCode::Left | KeyCode::Right,
+                code:
+                    KeyCode::Char(_)
+                    | KeyCode::Backspace
+                    | KeyCode::Tab
+                    | KeyCode::Delete
+                    | KeyCode::Insert
+                    | KeyCode::Left
+                    | KeyCode::Right,
                 kind: KeyEventKind::Press,
                 ..
             } => {
