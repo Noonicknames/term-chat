@@ -248,7 +248,7 @@ impl App {
                 let [_title_area, messages_area, _send_area] =
                     layout.areas(terminal.get_frame().area());
 
-                let mut messages_height = messages_area.height as usize - 2;
+                let mut messages_height = (messages_area.height as usize).saturating_sub(2);
                 let mut first_message = 0;
 
                 for (n, message) in self.messages.messages.iter().enumerate().rev() {
