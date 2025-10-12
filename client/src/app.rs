@@ -157,7 +157,7 @@ impl App {
         let layout = Layout::vertical([
             Constraint::Length(1),
             Constraint::Fill(1),
-            Constraint::Length(6),
+            Constraint::Length(8),
         ]);
         let [title_area, messages_area, send_area] = layout.areas(frame.area());
         let title = Line::from("term-chat")
@@ -204,6 +204,34 @@ impl App {
                     id: sender,
                     content,
                 });
+                let layout = Layout::vertical([
+                    Constraint::Length(1),
+                    Constraint::Fill(1),
+                    Constraint::Length(8),
+                ]);
+                let [_title_area, messages_area, _send_area] =
+                    layout.areas(terminal.get_frame().area());
+
+                let mut messages_height = messages_area.height as usize - 2;
+                let mut first_message = 0;
+
+                for (n, message) in self.messages.messages.iter().enumerate().rev() {
+                    match messages_height.checked_sub(message.content.split('\n').count()) {
+                        Some(0) => {
+                            first_message = n;
+                            break;
+                        }
+                        None => {
+                            first_message = n.saturating_sub(1);
+                            break;
+                        }
+                        Some(x) => {
+                            messages_height = x;
+                        }
+                    }
+                }
+
+                *self.messages.list_state.offset_mut() = first_message;
                 event_sender
                     .send(InteractiveEvent::RedrawRequest)
                     .await
@@ -315,7 +343,7 @@ impl Widget for &mut MessageListWidget {
         let block = Block::bordered()
             .border_style(Style::new().fg(Color::Rgb(255, 242, 197)))
             .title("Messages")
-            .title_bottom(Line::from("Esc to quit").right_aligned());
+            .title_bottom(Line::from(":q to quit").right_aligned());
 
         // a table with the list of pull requests
         let items = self.messages.iter();

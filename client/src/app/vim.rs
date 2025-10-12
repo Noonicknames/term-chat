@@ -24,10 +24,47 @@ pub enum VimMode {
     Command,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Action {
+    Char(char),
+    Number(u32),
+    #[default]
+    Empty,
+}
+
+impl Action {
+    pub fn clear(&mut self) {
+        *self = Self::Empty
+    }
+
+    pub fn from_key(code: KeyCode) -> Self {
+        match code {
+            KeyCode::Char(num @ '0'..'9') => Self::Number(num as u32 - '0' as u32),
+            KeyCode::Char(c) => Self::Char(c),
+            _ => Self::Empty,
+        }
+    }
+    pub fn update(&mut self, event: KeyEvent) {
+        if event.kind != KeyEventKind::Press {
+            return;
+        }
+
+        match (*self, Self::from_key(event.code)) {
+            (Self::Char(_) | Self::Empty | Self::Number(_), Self::Char(c)) => *self = Self::Char(c),
+            (Self::Char(_) | Self::Empty, Self::Number(num)) => *self = Self::Number(num),
+            (Self::Number(num_before), Self::Number(num)) => {
+                *self = Self::Number(num_before * 10 + num)
+            }
+            (_, Self::Empty) => *self = Self::Empty,
+        }
+    }
+}
+
 pub struct SendMessageWidget {
     resources: Arc<AppResources>,
     text_area: TextArea<'static>,
     command_text_area: TextArea<'static>,
+    prev_action: Action,
 }
 
 fn key_to_cursor_move(code: KeyCode) -> Option<CursorMove> {
@@ -56,10 +93,13 @@ impl SendMessageWidget {
                 .border_style(Style::new().fg(Color::Rgb(255, 242, 197))),
         );
 
+        let prev_action = Action::Empty;
+
         Self {
             resources,
             text_area,
             command_text_area,
+            prev_action,
         }
     }
     async fn send_message(&mut self, event_sender: &EventSender) -> bool {
@@ -78,18 +118,16 @@ impl SendMessageWidget {
     async fn normal_input(&mut self, event: KeyEvent, event_sender: &EventSender) -> bool {
         match event {
             KeyEvent {
-                code: KeyCode::Esc,
-                kind: KeyEventKind::Press,
-                ..
-            } => {
-                event_sender.send(InteractiveEvent::Quit).await.unwrap();
-                false
-            }
-            KeyEvent {
                 code: KeyCode::Enter,
                 kind: KeyEventKind::Press,
                 ..
-            } => self.send_message(event_sender).await,
+            } => {
+                if !self.text_area.is_empty() {
+                    self.send_message(event_sender).await
+                } else {
+                    false
+                }
+            }
             KeyEvent {
                 code: KeyCode::Char('i'),
                 kind: KeyEventKind::Press,
@@ -101,6 +139,38 @@ impl SendMessageWidget {
                         .title_top(Line::from("Insert").left_aligned())
                         .border_style(Style::new().fg(Color::Rgb(255, 242, 197))),
                 );
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('g'),
+                kind: KeyEventKind::Press,
+                ..
+            } if self.prev_action == Action::Char('g')=> {
+                self.text_area.move_cursor(CursorMove::Top);
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('G'),
+                kind: KeyEventKind::Press,
+                ..
+            } if self.prev_action == Action::Char('g')=> {
+                self.text_area.move_cursor(CursorMove::Bottom);
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('0'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.text_area.move_cursor(CursorMove::Head);
+                true
+            }
+            KeyEvent {
+                code: KeyCode::Char('$'),
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.text_area.move_cursor(CursorMove::End);
                 true
             }
             KeyEvent {
@@ -167,6 +237,10 @@ impl SendMessageWidget {
                     ":w" => {
                         self.send_message(event_sender).await;
                     }
+                    ":wq" | ":qw" => {
+                        self.send_message(event_sender).await;
+                        event_sender.send(InteractiveEvent::Quit).await.unwrap();
+                    }
                     _ => {}
                 }
                 self.command_text_area = TextArea::new(Vec::new());
@@ -211,7 +285,11 @@ impl SendMessageWidget {
         let mode = self.resources.state.read().await.mode;
         let cursor_before = self.text_area.cursor();
         let text_changed = match mode {
-            VimMode::Normal => self.normal_input(event, event_sender).await,
+            VimMode::Normal => {
+                let result = self.normal_input(event, event_sender).await;
+                self.prev_action.update(event);
+                result
+            }
             VimMode::Insert => self.insert_input(event, event_sender).await,
             VimMode::Command => self.command_input(event, event_sender).await,
         };
