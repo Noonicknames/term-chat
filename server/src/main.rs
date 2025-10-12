@@ -1,7 +1,7 @@
-use std::{num::NonZero, process::ExitCode, sync::Arc};
+use std::{process::ExitCode, sync::Arc};
 
 use clap::Parser;
-use log::{error, info, warn};
+use log::{error, info};
 
 use crate::server::{Server, ServerSettings};
 
@@ -24,29 +24,31 @@ pub struct Command {
 fn main() -> ExitCode {
     env_logger::init();
 
+    info!("Started server!");
+
     let Command {
         listen_address,
         max_concurrency,
         max_message_buffer_size,
     } = Command::parse();
 
-    let available_parallelism = match std::thread::available_parallelism() {
-        Ok(available_parallelism) => available_parallelism,
-        Err(err) => {
-            warn!(
-                "Error occurred fetching available parallelism: {}\nWill be using single thread.",
-                err
-            );
-            unsafe { NonZero::new_unchecked(1) }
-        }
-    };
+    // let available_parallelism = match std::thread::available_parallelism() {
+    //     Ok(available_parallelism) => available_parallelism,
+    //     Err(err) => {
+    //         warn!(
+    //             "Error occurred fetching available parallelism: {}\nWill be using single thread.",
+    //             err
+    //         );
+    //         unsafe { NonZero::new_unchecked(1) }
+    //     }
+    // };
 
-    info!("Available parallelism: {}", available_parallelism);
+    // info!("Available parallelism: {}", available_parallelism);
 
     let rt = match tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(available_parallelism.get())
+        //.worker_threads(available_parallelism.get())
         .enable_io()
-        .max_blocking_threads(available_parallelism.get())
+        //.max_blocking_threads(available_parallelism.get())
         .build()
     {
         Ok(rt) => rt,

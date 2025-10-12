@@ -1,14 +1,14 @@
-use std::{fmt::Display, net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{net::SocketAddr, sync::Arc};
 
-use common::ClientMessage;
-use futures::{StreamExt, stream::FuturesUnordered};
-use log::{error, info};
+use common::{ClientId, ClientMessage, ServerMessage, WriteStream, split_message_stream};
+use futures::{SinkExt, StreamExt, stream::FuturesUnordered};
+use log::{error, info, warn};
 use papaya::HashMap;
 use tokio::{
-    io::AsyncReadExt,
     net::{TcpListener, TcpStream, ToSocketAddrs},
-    runtime,
+    sync::Mutex,
 };
+use tokio_util::bytes::Bytes;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
@@ -16,21 +16,9 @@ pub enum ServerError {
     Io(#[from] std::io::Error),
 }
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub struct ClientId {
-    pub name: String,
-    pub addr: SocketAddr,
-}
-
-impl Display for ClientId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}", self.name, self.addr)
-    }
-}
-
 pub struct Client {
     id: ClientId,
-    stream: TcpStream,
+    write_msg: Mutex<WriteStream>,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -41,7 +29,7 @@ pub struct ServerSettings {
 
 pub struct Server {
     listener: TcpListener,
-    clients: HashMap<ClientId, Client>,
+    clients: HashMap<ClientId, Arc<Client>>,
 
     settings: ServerSettings,
 }
@@ -71,49 +59,138 @@ impl Server {
                 ));
 
                 // Enforce max concurrency
-                if futures.len() >= self.settings.max_concurrency {
+                while futures.len() >= self.settings.max_concurrency {
                     futures.next().await;
                 }
             }
         }
     }
 
-    pub async fn handle_new_connection(self: Arc<Self>, mut stream: TcpStream, addr: SocketAddr) {
-        let mut message = vec![0u8; self.settings.max_message_buffer_size];
+    pub async fn handle_new_connection(self: Arc<Self>, stream: TcpStream, addr: SocketAddr) {
+        let (write_msg, mut read_msg) = split_message_stream(stream);
+
         info!("Accepted {}", addr);
-        let message_len = match stream.read(&mut message).await {
-            Ok(message_len) => message_len,
-            Err(err) => {
-                error!("Error reading message from {}: {}", addr, err);
-                return;
+
+        let client_id = loop {
+            let message = match read_msg.next().await {
+                Some(Ok(message)) => message,
+                Some(Err(err)) => {
+                    error!("Error deserialising message from {}: {}", addr, err);
+                    return;
+                }
+                None => {
+                    error!(
+                        "Error deserialising message from {}: Didn't receive any messages.",
+                        addr
+                    );
+                    return;
+                }
+            };
+            let message: ClientMessage = match serde_cbor::from_slice(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    error!("Error deserialising message from {}: {}", addr, err);
+                    return;
+                }
+            };
+            match message {
+                ClientMessage::JoinRequest { name } => {
+                    let client_id = ClientId { name, addr };
+
+                    let client = Client {
+                        id: client_id.clone(),
+                        write_msg: Mutex::new(write_msg),
+                    };
+
+                    let clients = self.clients.pin_owned();
+                    clients.insert(client_id.clone(), Arc::new(client));
+
+                    let response = serde_cbor::ser::to_vec(&ServerMessage::AcceptJoin).unwrap();
+
+                    if let Err(err) = clients
+                        .get(&client_id)
+                        .unwrap()
+                        .write_msg
+                        .lock()
+                        .await
+                        .send(Bytes::from(response))
+                        .await
+                    {
+                        error!("Error writing to client {}: {}", client_id, err)
+                    }
+                    break client_id;
+                }
+                message => {
+                    warn!(
+                        "Message ignored since client has not joined yet: {:?}",
+                        message
+                    );
+                }
             }
         };
 
-        let message: ClientMessage = match serde_cbor::from_slice(&message[0..message_len]) {
-            Ok(message) => message,
-            Err(err) => {
-                error!("Error deserialising message from {}: {}", addr, err);
-                return;
-            }
-        };
+        loop {
+            let message = match read_msg.next().await {
+                Some(Ok(message)) => message,
+                Some(Err(err)) => {
+                    error!("Error deserialising message from {}: {}", addr, err);
+                    continue;
+                }
+                None => {
+                    error!(
+                        "Error deserialising message from {}",
+                        addr
+                    );
+                    break;
+                }
+            };
+            let message: ClientMessage = match serde_cbor::from_slice(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    error!("Error deserialising message from {}: {}", addr, err);
+                    continue;
+                }
+            };
+            match message {
+                ClientMessage::JoinRequest { name: _ } => {
+                    warn!("Client {} has already joined", client_id);
+                }
+                ClientMessage::SendMessage { message } => {
+                    info!("Client {} sent message: {:?}", client_id, message);
 
-        info!("Got message: {:?}", message);
-        match message {
-            ClientMessage::JoinRequest { name } => {
-                let client_id = ClientId { name, addr };
+                    let message = ServerMessage::ReceiveMessage {
+                        sender: client_id.clone(),
+                        message,
+                    };
+                    let message = match serde_cbor::to_vec(&message) {
+                        Ok(message) => Bytes::from(message),
+                        Err(err) => {
+                            error!("Error deserialising message from {}: {}", client_id, err);
+                            continue;
+                        }
+                    };
 
-                let client = Client {
-                    id: client_id.clone(),
-                    stream,
-                };
+                    let mut futures = FuturesUnordered::new();
 
-                let clients_pin = self.clients.pin();
-                clients_pin.insert(client_id, client);
-            }
-            ClientMessage::SendMessage { name, message } => {
-                let client_id = ClientId { name, addr };
-                info!("Client {} sent message: {:?}", client_id, message);
+                    let mut client_vec = Vec::new();
+                    for (_id, client) in self.clients.pin().iter() {
+                        client_vec.push(Arc::clone(client));
+                    }
+
+                    for client in client_vec {
+                        let message = message.clone();
+                        futures.push(async move {
+                            if let Err(err) = client.write_msg.lock().await.send(message).await {
+                                error!("Error sending message to {}: {}", client.id, err);
+                            }
+                        })
+                    }
+
+                    while let Some(()) = futures.next().await {}
+                }
             }
         }
+        self.clients.pin().remove(&client_id);
+        info!("{} has been removed from clients list.", client_id);
     }
 }

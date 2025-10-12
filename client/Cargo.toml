@@ -1,5 +1,5 @@
 [package]
-name = "client"
+name = "term-chat"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,8 +10,15 @@ readme.workspace = true
 common.workspace = true
 
 clap = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util"] }
+tui-textarea.workspace = true
+ratatui.workspace = true
+crossterm = { workspace = true, features = ["event-stream"] }
 
-env_logger.workspace = true
+futures = { workspace = true, features = ["alloc"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util", "macros", "sync", "io-std", "time"] }
+tokio-util = { workspace = true, features = ["codec"]}
+serde_cbor.workspace = true
+
+flexi_logger.workspace = true
 log = { workspace = true }
 thiserror.workspace = true

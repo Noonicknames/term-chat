@@ -1,46 +1,32 @@
-use std::{num::NonZero, process::ExitCode, sync::Arc};
+use std::process::ExitCode;
 
 use clap::Parser;
-use log::{error, info, warn};
+use flexi_logger::{FileSpec, Logger};
+use log::error;
 
-use crate::client::Client;
+use crate::app::run_app;
 
-pub mod client;
+pub mod app;
 
-/// client backend for term-chat
+/// Client for term-chat
 #[derive(clap::Parser)]
-pub struct Command {
-    /// What socket address to listen to.
-    ///
-    /// Example: "127.0.0.1:6942"
-    #[arg(long, default_value = "127.0.0.1:6942")]
-    client_address: String,
+pub struct CommandArgs {
+    name: String,
 }
 
 fn main() -> ExitCode {
-    env_logger::init();
+    Logger::try_with_env_or_str("info") // use RUST_LOG if set, or fallback to "info"
+        .unwrap()
+        .log_to_file(FileSpec::default().directory("logs").basename("app"))
+        .append() // don't overwrite on restart
+        .start()
+        .unwrap();
 
-    let Command {
-        client_address,
-    } = Command::parse();
-
-    let available_parallelism = match std::thread::available_parallelism() {
-        Ok(available_parallelism) => available_parallelism,
-        Err(err) => {
-            warn!(
-                "Error occurred fetching available parallelism: {}\nWill be using single thread.",
-                err
-            );
-            unsafe { NonZero::new_unchecked(1) }
-        }
-    };
-
-    info!("Available parallelism: {}", available_parallelism);
+    let args = CommandArgs::parse();
 
     let rt = match tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(available_parallelism.get())
         .enable_io()
-        .max_blocking_threads(available_parallelism.get())
+        .enable_time()
         .build()
     {
         Ok(rt) => rt,
@@ -50,16 +36,9 @@ fn main() -> ExitCode {
         }
     };
 
-    let client = match rt.block_on(Client::new()) {
-        Ok(client) => Arc::new(client),
-        Err(err) => {
-            error!("Error occurred: {}", err);
-            return ExitCode::FAILURE;
-        }
-    };
-
-    if let Err(err) = rt.block_on(client.run()) {
+    if let Err(err) = rt.block_on(run_app(args)) {
         error!("Error occurred: {}", err);
+        return ExitCode::FAILURE;
     }
 
     return ExitCode::SUCCESS;

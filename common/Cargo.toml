@@ -9,3 +9,7 @@ readme.workspace = true
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_cbor.workspace = true
+
+futures = { workspace = true, features = ["alloc"] }
+tokio = { workspace = true, features = ["io-util"] }
+tokio-util = { workspace = true, features = ["codec"]}

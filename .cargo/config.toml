@@ -1,2 +1,2 @@
 [env]
-rust_log = "info"
+rust_log = "debug"
