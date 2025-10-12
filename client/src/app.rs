@@ -1,11 +1,19 @@
 use std::sync::Arc;
 
 use common::{ClientId, ClientMessage, ServerMessage};
-use crossterm::event::{MouseEvent, MouseEventKind};
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture, MouseEvent, MouseEventKind},
+    execute,
+};
 use futures::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use ratatui::{
-    buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::Line, widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget}, DefaultTerminal, Frame
+    DefaultTerminal, Frame,
+    buffer::Buffer,
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Style, Stylize},
+    text::Line,
+    widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 use tokio_util::bytes::Bytes;
@@ -66,17 +74,27 @@ impl App {
         let mut terminal = ratatui::init();
         let event_stream = EventStream::new();
 
+        {
+            let mut stdout = std::io::stdout();
+            execute!(stdout, EnableMouseCapture).unwrap();
+        }
+
         let event_sender = event_stream.event_sender().clone();
         let resources = Arc::clone(&self.resources);
 
-        tokio::select! {
+        let result = tokio::select! {
             res = self.interactive_loop(&resources, &mut terminal, event_stream) => {
                 res
             }
             res = tokio::task::spawn(Self::network_loop(Arc::clone(&resources), event_sender)) => {
                 res?
             }
+        };
+        {
+            let mut stdout = std::io::stdout();
+            execute!(stdout, DisableMouseCapture).unwrap();
         }
+        result
     }
 
     pub async fn network_loop(

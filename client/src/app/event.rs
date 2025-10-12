@@ -1,8 +1,6 @@
 use common::ClientId;
-use crossterm::event::EnableMouseCapture;
 pub use crossterm::event::Event as TermEvent;
 use crossterm::event::EventStream as TermEventStream;
-use crossterm::execute;
 use futures::Stream;
 use futures::StreamExt;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -38,8 +36,6 @@ pub struct EventStream {
 impl EventStream {
     pub fn new() -> Self {
         let term_stream = TermEventStream::new();
-        let mut stdout = std::io::stdout();
-        execute!(stdout, EnableMouseCapture).unwrap();
         let (interactive_send, interactive_recv) = tokio::sync::mpsc::channel(256);
 
         Self {
