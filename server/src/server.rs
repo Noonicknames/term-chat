@@ -4,8 +4,9 @@ use common::{ClientId, ClientMessage, ServerMessage, WriteSink, split_message_st
 use futures::{SinkExt, StreamExt, stream::FuturesUnordered};
 use log::{error, info, warn};
 use papaya::HashMap;
+use serde::{Deserialize, Serialize};
 use tokio::{
-    net::{TcpListener, TcpStream, ToSocketAddrs},
+    net::{TcpListener, TcpStream},
     sync::Mutex,
 };
 use tokio_util::bytes::Bytes;
@@ -14,6 +15,8 @@ use tokio_util::bytes::Bytes;
 pub enum ServerError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 pub struct Client {
@@ -21,49 +24,64 @@ pub struct Client {
     write_msg: Mutex<WriteSink>,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerSettings {
+    pub listen_addresses: Vec<SocketAddr>,
     pub max_concurrency: usize,
     pub max_message_buffer_size: usize,
 }
 
+impl Default for ServerSettings {
+    fn default() -> Self {
+        Self {
+            listen_addresses: vec!["0.0.0.0:6942".parse().unwrap()],
+            max_concurrency: 128,
+            max_message_buffer_size: 2048,
+        }
+    }
+}
+
 pub struct Server {
-    listener: TcpListener,
     clients: HashMap<ClientId, Arc<Client>>,
 
     settings: ServerSettings,
 }
 
 impl Server {
-    pub async fn new(
-        listen_addr: impl ToSocketAddrs,
-        settings: ServerSettings,
-    ) -> Result<Self, ServerError> {
+    pub async fn new(settings: ServerSettings) -> Result<Self, ServerError> {
         let clients = HashMap::new();
 
-        let listener = TcpListener::bind(listen_addr).await?;
-
-        Ok(Self {
-            clients,
-            listener,
-            settings,
-        })
+        Ok(Self { clients, settings })
     }
     pub async fn run_loop(self: &Arc<Self>) -> Result<(), ServerError> {
+        info!("Started server!");
         let mut futures = FuturesUnordered::new();
+        let mut listeners = Vec::new();
 
-        loop {
-            if let Ok((stream, addr)) = self.listener.accept().await {
-                futures.push(tokio::spawn(
-                    Arc::clone(self).handle_new_connection(stream, addr),
-                ));
-
-                // Enforce max concurrency
-                while futures.len() >= self.settings.max_concurrency {
-                    futures.next().await;
-                }
-            }
+        for address in self.settings.listen_addresses.iter() {
+            listeners.push(TcpListener::bind(address).await?);
         }
+        for listener in listeners {
+            let this = Arc::clone(self);
+            futures.push(tokio::spawn(async move {
+                let mut futures = FuturesUnordered::new();
+                loop {
+                    if let Ok((stream, addr)) = listener.accept().await {
+                        futures.push(tokio::spawn(
+                            Arc::clone(&this).handle_new_connection(stream, addr),
+                        ));
+
+                        // Enforce max concurrency
+                        while futures.len() >= this.settings.max_concurrency {
+                            futures.next().await;
+                        }
+                    }
+                }
+            }));
+        }
+
+        futures.next().await;
+        Ok(())
     }
 
     pub async fn handle_new_connection(self: Arc<Self>, stream: TcpStream, addr: SocketAddr) {

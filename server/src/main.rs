@@ -10,45 +10,37 @@ pub mod server;
 
 /// Server backend for term-chat
 #[derive(clap::Parser)]
-pub struct Command {
-    /// What socket address to listen to.
-    ///
-    /// Example: "127.0.0.1:6942"
-    listen_address: String,
-    #[arg(long, default_value_t = 64)]
-    max_concurrency: usize,
-    #[arg(long, default_value_t = 1024)]
-    max_message_buffer_size: usize,
+pub enum Command {
+    /// Create a new settings file to load.
+    New {
+        /// Path to write settings file.
+        #[arg(long, default_value = "server-settings.ron")]
+        path: String,
+        /// Overwrite if already exists?
+        #[arg(long, default_value_t = false)]
+        overwrite: bool,
+    },
+    /// Run normally from a `server-settings.ron` file.
+    Run {
+        /// Path to settings file.
+        #[arg(long, default_value = "server-settings.ron")]
+        path: String,
+    },
+    /// Direct input through command line interface.
+    Cli {
+        listen_addresses: Vec<String>,
+        #[arg(long, default_value_t = 64)]
+        max_concurrency: usize,
+        #[arg(long, default_value_t = 2048)]
+        max_message_buffer_size: usize,
+    },
 }
 
 fn main() -> ExitCode {
     env_logger::init();
 
-    info!("Started server!");
-
-    let Command {
-        listen_address,
-        max_concurrency,
-        max_message_buffer_size,
-    } = Command::parse();
-
-    // let available_parallelism = match std::thread::available_parallelism() {
-    //     Ok(available_parallelism) => available_parallelism,
-    //     Err(err) => {
-    //         warn!(
-    //             "Error occurred fetching available parallelism: {}\nWill be using single thread.",
-    //             err
-    //         );
-    //         unsafe { NonZero::new_unchecked(1) }
-    //     }
-    // };
-
-    // info!("Available parallelism: {}", available_parallelism);
-
     let rt = match tokio::runtime::Builder::new_multi_thread()
-        //.worker_threads(available_parallelism.get())
         .enable_io()
-        //.max_blocking_threads(available_parallelism.get())
         .build()
     {
         Ok(rt) => rt,
@@ -58,21 +50,63 @@ fn main() -> ExitCode {
         }
     };
 
-    let server_settings = ServerSettings {
-        max_concurrency,
-        max_message_buffer_size,
-    };
+    match Command::parse() {
+        Command::New { path, overwrite } => {
+            let settings = ServerSettings::default();
+            let settings_ser =
+                ron::ser::to_string_pretty(&settings, ron::ser::PrettyConfig::new()).unwrap();
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .create_new(!overwrite)
+                .open(path)
+                .unwrap();
 
-    let server = match rt.block_on(Server::new(listen_address, server_settings)) {
-        Ok(server) => Arc::new(server),
-        Err(err) => {
-            error!("Error occurred: {}", err);
-            return ExitCode::FAILURE;
+            write!(&mut file, "{}", settings_ser).unwrap();
         }
-    };
+        Command::Run { path } => {
+            let settings_ser = std::fs::read(path).unwrap();
+            let server_settings = ron::de::from_bytes(&settings_ser).unwrap();
+            let server = match rt.block_on(Server::new(server_settings)) {
+                Ok(server) => Arc::new(server),
+                Err(err) => {
+                    error!("Error occurred: {}", err);
+                    return ExitCode::FAILURE;
+                }
+            };
 
-    if let Err(err) = rt.block_on(server.run_loop()) {
-        error!("Error occurred: {}", err);
+            if let Err(err) = rt.block_on(server.run_loop()) {
+                error!("Error occurred: {}", err);
+            }
+        }
+        Command::Cli {
+            listen_addresses,
+            max_concurrency,
+            max_message_buffer_size,
+        } => {
+            let server_settings = ServerSettings {
+                listen_addresses: listen_addresses
+                    .iter()
+                    .map(|addresss| addresss.parse().unwrap())
+                    .collect(),
+                max_concurrency,
+                max_message_buffer_size,
+            };
+
+            let server = match rt.block_on(Server::new(server_settings)) {
+                Ok(server) => Arc::new(server),
+                Err(err) => {
+                    error!("Error occurred: {}", err);
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            if let Err(err) = rt.block_on(server.run_loop()) {
+                error!("Error occurred: {}", err);
+            }
+        }
     }
 
     return ExitCode::SUCCESS;

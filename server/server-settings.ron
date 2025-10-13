@@ -1,0 +1,7 @@
+(
+    listen_addresses: [
+        "0.0.0.0:6942",
+    ],
+    max_concurrency: 128,
+    max_message_buffer_size: 2048,
+)

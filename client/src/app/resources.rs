@@ -1,16 +1,20 @@
-use common::{split_message_stream, ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink};
+use std::net::SocketAddr;
+
+use common::{ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink, split_message_stream};
 use futures::{SinkExt, StreamExt};
 use log::info;
-use tokio::{net::TcpSocket, sync::{Mutex, RwLock}};
+use tokio::{
+    net::TcpSocket,
+    sync::{Mutex, RwLock},
+};
 use tokio_util::bytes::Bytes;
 
-use crate::app::{vim::VimMode, AppError};
+use crate::app::{AppError, vim::VimMode};
 
 #[derive(Debug, Default)]
 pub struct AppState {
     pub mode: VimMode,
 }
-
 
 pub struct AppResources {
     pub id: ClientId,
@@ -21,8 +25,6 @@ pub struct AppResources {
 
 impl AppResources {
     pub async fn new(name: String) -> Result<Self, AppError> {
-        let socket = TcpSocket::new_v4()?;
-
         let Some(server_addr) = tokio::net::lookup_host("www.banhana.org:6942")
             .await
             .unwrap()
@@ -32,6 +34,11 @@ impl AppResources {
         };
 
         info!("Resolved server socket address: {}", server_addr);
+
+        let socket = match server_addr {
+            SocketAddr::V4(_) => TcpSocket::new_v4(),
+            SocketAddr::V6(_) => TcpSocket::new_v6(),
+        }?;
 
         let stream = socket.connect(server_addr).await?;
 

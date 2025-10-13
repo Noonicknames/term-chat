@@ -11,10 +11,18 @@ common.workspace = true
 
 futures = { workspace = true, features = ["alloc"] }
 clap = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util", "sync"] }
-tokio-util = { workspace = true, features = ["codec"]}
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "net",
+    "io-util",
+    "sync",
+    "macros",
+] }
+tokio-util = { workspace = true, features = ["codec"] }
 serde_cbor.workspace = true
 papaya.workspace = true
+serde = { workspace = true, features = ["derive"] }
+ron = { workspace = true }
 
 env_logger.workspace = true
 log = { workspace = true }
