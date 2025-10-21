@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use common::{ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink, split_message_stream};
+use common::{secure::SecureStream, ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink};
 use futures::{SinkExt, StreamExt};
 use log::info;
 use tokio::{
@@ -47,7 +47,9 @@ impl AppResources {
             addr: stream.local_addr().unwrap(),
         };
 
-        let (mut write_msg, mut read_msg) = split_message_stream(stream);
+        let stream = SecureStream::handshake(stream).await.unwrap();
+
+        let (mut write_msg, mut read_msg) = stream.split();
 
         let buf = serde_cbor::to_vec(&ClientMessage::JoinRequest { name }).unwrap();
 

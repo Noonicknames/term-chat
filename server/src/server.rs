@@ -1,6 +1,9 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use common::{ClientId, ClientMessage, ServerMessage, WriteSink, split_message_stream};
+use bytes::Bytes;
+use common::{
+    ClientId, ClientMessage, ServerMessage, WriteSink, secure::SecureStream,
+};
 use futures::{SinkExt, StreamExt, stream::FuturesUnordered};
 use log::{error, info, warn};
 use papaya::HashMap;
@@ -9,7 +12,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
 };
-use tokio_util::bytes::Bytes;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
@@ -85,12 +87,19 @@ impl Server {
     }
 
     pub async fn handle_new_connection(self: Arc<Self>, stream: TcpStream, addr: SocketAddr) {
-        let (write_msg, mut read_msg) = split_message_stream(stream);
+        let stream = match SecureStream::handshake(stream).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        };
+        let (write_msg, mut read_msg) = stream.split();
 
         info!("Accepted {}", addr);
 
         let client_id = loop {
-            let message = match read_msg.next().await {
+            let message: Bytes = match read_msg.next().await {
                 Some(Ok(message)) => message,
                 Some(Err(err)) => {
                     error!("Error deserialising message from {}: {}", addr, err);

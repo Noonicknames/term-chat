@@ -11,5 +11,14 @@ serde = { workspace = true, features = ["derive"] }
 serde_cbor.workspace = true
 
 futures = { workspace = true, features = ["alloc"] }
-tokio = { workspace = true, features = ["io-util"] }
+tokio = { workspace = true, features = ["io-util", "time", "rt", "net"] }
 tokio-util = { workspace = true, features = ["codec"]}
+bytes = { workspace = true }
+
+rand.workspace = true
+aes-gcm.workspace = true
+thiserror.workspace = true
+hkdf.workspace = true
+lz4.workspace = true
+p521 = { workspace = true, features = ["serde"] }
+sha2.workspace = true

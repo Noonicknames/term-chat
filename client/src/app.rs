@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use common::{ClientId, ClientMessage, ServerMessage};
+use common::{secure::SecureStreamError, ClientId, ClientMessage, ServerMessage};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, MouseEvent, MouseEventKind},
     execute,
@@ -38,6 +38,8 @@ pub enum AppError {
     ServerError,
     #[error("No valid ports were found")]
     NoValidPorts,
+    #[error(transparent)]
+    SecureStreamError(#[from] SecureStreamError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

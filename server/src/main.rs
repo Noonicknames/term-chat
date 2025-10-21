@@ -1,7 +1,7 @@
 use std::{process::ExitCode, sync::Arc};
 
 use clap::Parser;
-use log::{error, info};
+use log::error;
 
 use crate::server::{Server, ServerSettings};
 

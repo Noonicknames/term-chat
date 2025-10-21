@@ -1,22 +1,17 @@
 use std::{fmt::Display, net::SocketAddr};
 
-use futures::{
-    StreamExt,
-    stream::{SplitSink, SplitStream},
-};
+use bytes::Bytes;
+use futures::stream::{SplitSink, SplitStream};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
+use crate::secure::SecureStream;
 
 pub mod secure;
+pub mod codec;
 
-pub type ReadStream = SplitStream<Framed<TcpStream, LengthDelimitedCodec>>;
-pub type WriteSink = SplitSink<Framed<TcpStream, LengthDelimitedCodec>, tokio_util::bytes::Bytes>;
-
-pub fn split_message_stream(stream: TcpStream) -> (WriteSink, ReadStream) {
-    Framed::new(stream, LengthDelimitedCodec::new()).split()
-}
+pub type ReadStream = SplitStream<SecureStream<TcpStream, Bytes>>;
+pub type WriteSink = SplitSink<SecureStream<TcpStream, Bytes>, Bytes>;
 
 /// Message coming from the client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
