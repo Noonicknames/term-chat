@@ -33,7 +33,6 @@ hkdf = "0.12.*"
 lz4 = "1.28.*"
 p521 = { version = "0.13.*", features = ["ecdh", "rand_core"] }
 sha2 = "0.10.9"
-chacha20poly1305 = { version = "0.10.*" }
 
 log = { version = "0.4.*" }
 thiserror = { version = "2.*" }

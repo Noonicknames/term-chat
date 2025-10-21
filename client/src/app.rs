@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use common::{secure::SecureStreamError, ClientId, ClientMessage, ServerMessage};
+use common::{ClientId, ClientMessage, ServerMessage, secure::SecureStreamError};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, MouseEvent, MouseEventKind},
     execute,
@@ -16,6 +16,7 @@ use ratatui::{
     widgets::{Block, HighlightSpacing, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
+use tokio::time::Instant;
 use tokio_util::bytes::Bytes;
 use unicode_width::UnicodeWidthStr;
 
@@ -57,11 +58,24 @@ pub async fn run_app(args: CommandArgs) -> Result<(), AppError> {
     Ok(())
 }
 
+#[derive(Debug, Default, Clone, Hash, PartialEq, Eq)]
+pub enum FrameStatus {
+    LastFrame {
+        instant: Instant,
+    },
+    AwaitingRender {
+        instant: Instant,
+    },
+    #[default]
+    None,
+}
+
 pub struct App {
     resources: Arc<AppResources>,
     messages: MessageListWidget,
     client_list: ClientListWidget,
     send_message: SendMessageWidget,
+    frame_status: FrameStatus,
 }
 
 impl App {
@@ -70,6 +84,7 @@ impl App {
             messages: MessageListWidget::new(),
             client_list: ClientListWidget::new(),
             send_message: SendMessageWidget::new(Arc::clone(&resources)),
+            frame_status: FrameStatus::None,
             resources,
         })
     }
@@ -223,8 +238,40 @@ impl App {
         match event {
             InteractiveEvent::Quit => Ok(true),
             InteractiveEvent::RedrawRequest => {
-                // terminal.swap_buffers();
-                terminal.draw(|frame| self.render(frame)).unwrap();
+                match self.frame_status {
+                    FrameStatus::AwaitingRender { instant } => {
+                        if Instant::now() > instant {
+                            self.frame_status = FrameStatus::LastFrame {
+                                instant: Instant::now(),
+                            };
+                            terminal.draw(|frame| self.render(frame)).unwrap();
+                        }
+                    }
+                    FrameStatus::LastFrame { instant } => {
+                        if Instant::now() > instant + Duration::from_secs_f32(1.0 / 60.0) {
+                            self.frame_status = FrameStatus::LastFrame {
+                                instant: Instant::now(),
+                            };
+                            terminal.draw(|frame| self.render(frame)).unwrap();
+                        } else {
+                            let target_instant = instant + Duration::from_secs_f32(1.0 / 60.0);
+                            self.frame_status = FrameStatus::AwaitingRender {
+                                instant: target_instant,
+                            };
+                            let event_sender = event_sender.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep_until(target_instant).await;
+                                event_sender.send(InteractiveEvent::RedrawRequest).await.unwrap();
+                            });
+                        }
+                    }
+                    FrameStatus::None => {
+                        self.frame_status = FrameStatus::LastFrame {
+                            instant: Instant::now(),
+                        };
+                        terminal.draw(|frame| self.render(frame)).unwrap();
+                    }
+                }
                 Ok(false)
             }
             InteractiveEvent::ClientListUpdate { clients } => {
