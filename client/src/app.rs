@@ -32,6 +32,7 @@ use crate::{
 pub mod event;
 pub mod resources;
 pub mod vim;
+// pub mod gesture;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -48,8 +49,8 @@ pub enum AppError {
 }
 
 pub async fn run_app(args: CommandArgs) -> Result<(), AppError> {
-    let CommandArgs { name } = args;
-    let resources = Arc::new(AppResources::new(name).await?);
+    let CommandArgs { name, host } = args;
+    let resources = Arc::new(AppResources::new(name, host).await?);
 
     let mut app = App::new(resources).await?;
 
@@ -261,7 +262,10 @@ impl App {
                             let event_sender = event_sender.clone();
                             tokio::spawn(async move {
                                 tokio::time::sleep_until(target_instant).await;
-                                event_sender.send(InteractiveEvent::RedrawRequest).await.unwrap();
+                                event_sender
+                                    .send(InteractiveEvent::RedrawRequest)
+                                    .await
+                                    .unwrap();
                             });
                         }
                     }

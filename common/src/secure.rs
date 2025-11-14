@@ -48,8 +48,8 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     Item: Serialize + DeserializeOwned,
 {
-    pub async fn handshake(inner: S) -> Result<Self, SecureStreamError> {
-        let mut inner = CompressedCborStream::new(inner);
+    pub async fn handshake(inner: S, max_frame_size: usize) -> Result<Self, SecureStreamError> {
+        let mut inner = CompressedCborStream::new(inner, max_frame_size);
         let secret = EphemeralSecret::random(&mut OsRng);
 
         inner
@@ -198,6 +198,7 @@ where
 mod test {
     use futures::{SinkExt, StreamExt};
     use serde::{Deserialize, Serialize};
+    use tokio::io::AsyncWriteExt;
 
     use crate::secure::SecureStream;
 
@@ -206,6 +207,54 @@ mod test {
         string: String,
         number: u32,
         void: (),
+    }
+
+    #[test]
+    fn test_malformed() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .build()
+            .unwrap();
+
+        let (ready_send, mut ready_recv) = tokio::sync::mpsc::channel(1);
+
+        let server = {
+            rt.spawn(async move {
+                // Get ephemeral port in case it clashes with other tests.
+                let listener = tokio::net::TcpListener::bind("localhost:0")
+                    .await
+                    .unwrap();
+                ready_send.send(listener.local_addr().unwrap().port()).await.unwrap();
+                let (mut stream, _) = listener.accept().await.unwrap();
+
+                stream
+                    .write_all(b"60lalalalalalala IM BOUTTA CRASH THIS SERVER OHH YEAAHHHHHHH!!!")
+                    .await
+                    .unwrap();
+            })
+        };
+
+        let client = {
+            rt.spawn(async move {
+                let port = ready_recv.recv().await.unwrap();
+                let stream = tokio::net::TcpStream::connect(format!("localhost:{}", port))
+                    .await
+                    .unwrap();
+
+                let stream =
+                    SecureStream::<_, TestStruct>::handshake(stream, 8 * 1024 * 1024).await;
+
+                match stream {
+                    Err(_err) => (),
+                    Ok(_stream) => panic!("Did not error from malformed input"),
+                }
+            })
+        };
+
+        rt.block_on(async {
+            client.await.unwrap();
+            server.await.unwrap();
+        });
     }
 
     #[test]
@@ -220,14 +269,19 @@ mod test {
             number: 69,
             void: (),
         };
+        let (ready_send, mut ready_recv) = tokio::sync::mpsc::channel(1);
+
         let client = {
             let test_enum = test_enum.clone();
             rt.spawn(async move {
-                let stream = tokio::net::TcpStream::connect("localhost:1234")
+                let port = ready_recv.recv().await.unwrap();
+                let stream = tokio::net::TcpStream::connect(format!("localhost:{}", port))
                     .await
                     .unwrap();
 
-                let stream = SecureStream::handshake(stream).await.unwrap();
+                let stream = SecureStream::handshake(stream, 8 * 1024 * 1024)
+                    .await
+                    .unwrap();
 
                 let (mut send, mut recv) = stream.split();
 
@@ -247,9 +301,12 @@ mod test {
                     .await
                     .unwrap();
 
+                ready_send.send(listener.local_addr().unwrap().port()).await.unwrap();
                 let (stream, _) = listener.accept().await.unwrap();
 
-                let stream = SecureStream::handshake(stream).await.unwrap();
+                let stream = SecureStream::handshake(stream, 8 * 1024 * 1024)
+                    .await
+                    .unwrap();
 
                 let (mut send, mut recv) = stream.split();
 

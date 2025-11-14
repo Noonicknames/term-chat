@@ -22,9 +22,11 @@ where
     S: AsyncWrite + AsyncRead,
     Item: DeserializeOwned + Serialize,
 {
-    pub fn new(inner: S) -> Self {
+    pub fn new(inner: S, max_frame_length: usize) -> Self {
         Self {
-            inner: Framed::new(inner, LengthDelimitedCodec::new()),
+            inner: LengthDelimitedCodec::builder()
+                .max_frame_length(max_frame_length)
+                .new_framed(inner),
             _phantom: PhantomData,
         }
     }
@@ -177,7 +179,7 @@ mod test {
         void: (),
     }
 
-        #[test]
+    #[test]
     fn test_compressed_cbor_stream() {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_io()
@@ -196,7 +198,7 @@ mod test {
                     .await
                     .unwrap();
 
-                let cbor_stream = CompressedCborStream::new(stream);
+                let cbor_stream = CompressedCborStream::new(stream, 1 << 14);
 
                 let (mut send, mut recv) = cbor_stream.split();
 
@@ -218,7 +220,7 @@ mod test {
 
                 let (stream, _) = listener.accept().await.unwrap();
 
-                let cbor_stream = CompressedCborStream::new(stream);
+                let cbor_stream = CompressedCborStream::new(stream, 1 << 14);
 
                 let (mut send, mut recv) = cbor_stream.split();
 

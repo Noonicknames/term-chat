@@ -33,6 +33,8 @@ pub enum Command {
         max_concurrency: usize,
         #[arg(long, default_value_t = 2048)]
         max_message_buffer_size: usize,
+        #[arg(long, default_value_t = 8 * 1024 * 1024)]
+        max_frame_size: usize,
     },
 }
 
@@ -85,6 +87,7 @@ fn main() -> ExitCode {
             listen_addresses,
             max_concurrency,
             max_message_buffer_size,
+            max_frame_size,
         } => {
             let server_settings = ServerSettings {
                 listen_addresses: listen_addresses
@@ -93,6 +96,7 @@ fn main() -> ExitCode {
                     .collect(),
                 max_concurrency,
                 max_message_buffer_size,
+                max_frame_size,
             };
 
             let server = match rt.block_on(Server::new(server_settings)) {

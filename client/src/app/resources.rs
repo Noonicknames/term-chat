@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use common::{secure::SecureStream, ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink};
+use common::{ClientId, ClientMessage, ReadStream, ServerMessage, WriteSink, secure::SecureStream};
 use futures::{SinkExt, StreamExt};
 use log::info;
 use tokio::{
@@ -24,11 +24,12 @@ pub struct AppResources {
 }
 
 impl AppResources {
-    pub async fn new(name: String) -> Result<Self, AppError> {
-        let Some(server_addr) = tokio::net::lookup_host("www.banhana.org:6942")
-            .await
-            .unwrap()
-            .next()
+    pub async fn new(name: String, host: Option<String>) -> Result<Self, AppError> {
+        let Some(server_addr) =
+            tokio::net::lookup_host(host.as_deref().unwrap_or("www.banhana.org:6942"))
+                .await
+                .unwrap()
+                .next()
         else {
             return Err(AppError::ServerError);
         };
@@ -47,7 +48,9 @@ impl AppResources {
             addr: stream.local_addr().unwrap(),
         };
 
-        let stream = SecureStream::handshake(stream).await.unwrap();
+        let stream = SecureStream::handshake(stream, 8 * 1024 * 1024)
+            .await
+            .unwrap();
 
         let (mut write_msg, mut read_msg) = stream.split();
 

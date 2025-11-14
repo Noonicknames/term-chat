@@ -12,6 +12,7 @@ pub mod app;
 #[derive(clap::Parser)]
 pub struct CommandArgs {
     name: String,
+    host: Option<String>,
 }
 
 fn main() -> ExitCode {

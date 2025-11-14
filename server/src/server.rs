@@ -1,9 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
-use common::{
-    ClientId, ClientMessage, ServerMessage, WriteSink, secure::SecureStream,
-};
+use common::{ClientId, ClientMessage, ServerMessage, WriteSink, secure::SecureStream};
 use futures::{SinkExt, StreamExt, stream::FuturesUnordered};
 use log::{error, info, warn};
 use papaya::HashMap;
@@ -31,6 +29,10 @@ pub struct ServerSettings {
     pub listen_addresses: Vec<SocketAddr>,
     pub max_concurrency: usize,
     pub max_message_buffer_size: usize,
+    /// Max frame size in bytes for each message sent and received from client.
+    ///
+    /// Default is 8Mib
+    pub max_frame_size: usize,
 }
 
 impl Default for ServerSettings {
@@ -39,6 +41,7 @@ impl Default for ServerSettings {
             listen_addresses: vec!["0.0.0.0:6942".parse().unwrap()],
             max_concurrency: 128,
             max_message_buffer_size: 2048,
+            max_frame_size: 8 * 1024 * 1024,
         }
     }
 }
@@ -87,7 +90,7 @@ impl Server {
     }
 
     pub async fn handle_new_connection(self: Arc<Self>, stream: TcpStream, addr: SocketAddr) {
-        let stream = match SecureStream::handshake(stream).await {
+        let stream = match SecureStream::handshake(stream, self.settings.max_frame_size).await {
             Ok(stream) => stream,
             Err(err) => {
                 error!("{}", err);
