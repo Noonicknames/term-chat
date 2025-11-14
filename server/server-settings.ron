@@ -1,8 +1,0 @@
-(
-    listen_addresses: [
-        "[2001:4479:c105:3e00:45d7:456:1605:2759]:6942",
-    ],
-    max_concurrency: 128,
-    max_message_buffer_size: 2048,
-    max_frame_size: 8388608,
-)
